@@ -16,13 +16,13 @@
           </e>
           <e p="ImageBuilder.cs" t="Include" />
           <e p="Utils" t="Include">
-            <e p="CellStatus.cs" t="Include" />
             <e p="ContourLinesReader.cs" t="Include" />
             <e p="DataStructure.cs" t="Include" />
             <e p="HeightMapBuilder.cs" t="Include" />
-            <e p="Interpolator.cs" t="Include" />
             <e p="interpolators" t="Include">
+              <e p="CellStatus.cs" t="Include" />
               <e p="EuclideanDistInterpolator.cs" t="Include" />
+              <e p="Interpolator.cs" t="Include" />
               <e p="ManhattanDistInterpolator.cs" t="Include" />
             </e>
             <e p="MapRotator.cs" t="Include" />
