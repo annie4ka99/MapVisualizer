@@ -1,9 +1,8 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using Utils;
+using Utils.interpolators;
 
 public class ImageBuilder : MonoBehaviour
 {
@@ -14,8 +13,14 @@ public class ImageBuilder : MonoBehaviour
         
         var contourLines = Utils.ContourLinesReader.ReadMetricContourLines(0);
         var (heights, linesCoords) = contourLines;
+
+        MapRotator.Rotate(linesCoords);
+        
         var heightMapBuilder = new HeightMapBuilder(width, height);
-        var (filledHeights, filled) = heightMapBuilder.Build(heights, linesCoords);
+        
+//        Interpolator interpolator = new EuclideanDistInterpolator();
+        Interpolator interpolator = new ManhattanDistInterpolator();
+        var (filledHeights, filled) = heightMapBuilder.Build(heights, linesCoords, interpolator);
 
         var minHeight = heights.Min();
         var maxHeight = heights.Max();
@@ -30,8 +35,16 @@ public class ImageBuilder : MonoBehaviour
             {
                 if (filled[x, y])
                 {
-                    var color = Color.Lerp(Color.green, Color.red, 
-                        (float) (filledHeights[x,y]/heightScale));
+                    Color color;
+                    // color contours blue
+                    if (filledHeights[x, y] == -1.0)
+                    {
+                        color = Color.blue;
+                        texture.SetPixel(x, y, color);
+                        continue;
+                    }
+                    color = Color.Lerp(Color.green, Color.red, 
+                        (float) ((filledHeights[x,y] - minHeight)/heightScale));
                     texture.SetPixel(x, y, color);
                 }
                 else

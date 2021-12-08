@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
@@ -25,9 +26,11 @@ namespace Utils
                 var xy = new List<(double, double)>();
                 foreach (var coordinateString in coordinateStrings)
                 {
-                    var coords = coordinateString.Replace('.',',')
+                    var coords = coordinateString
                         .Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries);
-                    xy.Add((Convert.ToDouble(coords[0]), Convert.ToDouble(coords[1])));
+                    xy.Add((
+                        double.Parse(coords[0], CultureInfo.InvariantCulture), 
+                        double.Parse(coords[1], CultureInfo.InvariantCulture)));
                 }
                 contourLinesCoords.Add(xy);
             }
@@ -92,7 +95,7 @@ namespace Utils
                     foreach (var lineCoords in linesCoords)
                     {
                         var (heights, lines) = contourLines[layer.Name];
-                        heights.Add(Convert.ToDouble(height));
+                        heights.Add(double.Parse(height, CultureInfo.InvariantCulture));
                         lines.Add(lineCoords);
                     }
                 }

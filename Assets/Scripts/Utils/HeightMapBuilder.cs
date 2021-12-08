@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using UnityEngine;
 
 namespace Utils
 {
@@ -8,11 +10,15 @@ namespace Utils
         private readonly int _xSize;
         private readonly int _ySize;
         
-        private bool[,] _filled;
-        private double[,] _filledHeights;
-        private int[,] _filledLinesInds;
-        private double[] _heights;
+        private bool[,] _isFilled;
+        private double[,] _heights;
+        private int[,] _closestContourIds;
+        private double[] _contourHeights;
         
+        private int[] _xLeftBounds;
+        private int[] _xRightBounds;
+        private int[] _yBottomBounds;
+        private int[] _yUpperBounds;
         
         public HeightMapBuilder(int xSize, int ySize)
         {
@@ -21,15 +27,22 @@ namespace Utils
         }
         
         
-        public (double[,], bool[,]) Build(List<double> heights, List<List<(double, double)>> linesCoords)
+        public (double[,], bool[,]) Build(List<double> heights, 
+            List<List<(double, double)>> linesCoords, 
+            Interpolator interpolator)
         {
-            _heights = heights.ToArray();
+            _contourHeights = heights.ToArray();
             
             var (minX, maxX, minY, maxY) = GetCoordsBounds(linesCoords);
 
             FillGridFromContours(minX, maxX, minY, maxY, linesCoords);
 
-            return (_filledHeights, _filled);
+            FillAxesBounds();
+
+            interpolator.InterpolateGrid(_xSize, _ySize, _closestContourIds, _isFilled, 
+                OutOfMapBounds, _heights, _contourHeights);
+            
+            return (_heights, _isFilled);
 
         }
         
@@ -56,8 +69,58 @@ namespace Utils
 
             return (minX, maxX, minY, maxY);
         }
+        
+        private void FillAxesBounds()
+        {
+            _xLeftBounds = new int[_ySize];
+            _xRightBounds = new int[_ySize];
+            _yBottomBounds = new int[_xSize];
+            _yUpperBounds = new int[_xSize];
+
+            for (var i = 0; i < _ySize; ++i)
+            {
+                _xLeftBounds[i] = _xSize;
+                _xRightBounds[i] = 0;
+            }
+            for (var i = 0; i < _xSize; ++i)
+            {
+                _yBottomBounds[i] = _ySize;
+                _yUpperBounds[i] = 0;
+            }
+
+            for (var x = 0; x < _xSize; ++x)
+                for (var y = 0; y < _ySize; ++y)
+                {
+                    if (!_isFilled[x, y]) continue;
+                    if (x < _xLeftBounds[y])
+                    {
+                        _xLeftBounds[y] = x;
+                    }
+                    if (x > _xRightBounds[y])
+                    {
+                        _xRightBounds[y] = x;
+                    }
+
+                    if (y < _yBottomBounds[x])
+                    {
+                        _yBottomBounds[x] = y;
+                    }
+
+                    if (y > _yUpperBounds[x])
+                    {
+                        _yUpperBounds[x] = y;
+                    }
+                }
+        }
 
 
+        private bool OutOfMapBounds(int x, int y)
+        {
+            var outOfX = x < _xLeftBounds[y] || x > _xRightBounds[y];
+            var outOfY = y < _yBottomBounds[x] || y > _yUpperBounds[x];
+            return outOfX || outOfY;
+        }
+        
         private void FillGridFromContours(
             double minX, double maxX, double minY, double maxY,
             List<List<(double, double)>> linesCoords)
@@ -65,13 +128,13 @@ namespace Utils
             var xStep = (maxX - minX) / (_xSize);
             var yStep = (maxY - minY) / (_ySize);
             
-            _filled = new bool[_xSize, _ySize];
+            _isFilled = new bool[_xSize, _ySize];
             for (var i = 0; i < _xSize; ++i)
                 for (var j = 0; j < _ySize; ++j)
-                    _filled[i, j] = false;
+                    _isFilled[i, j] = false;
             
-            _filledHeights = new double[_xSize,_ySize];
-            _filledLinesInds = new int[_xSize,_ySize];
+            _heights = new double[_xSize,_ySize];
+            _closestContourIds = new int[_xSize,_ySize];
             
             for (var lineInd = 0; lineInd < linesCoords.Count; ++lineInd)
             {
@@ -89,9 +152,9 @@ namespace Utils
                     if (curYInd == _ySize)
                         curYInd = _ySize - 1;
                     
-                    _filled[curXInd,curYInd] = true;
-                    _filledHeights[curXInd, curYInd] = _heights[lineInd];
-                    _filledLinesInds[curXInd, curYInd] = lineInd;
+                    _isFilled[curXInd,curYInd] = true;
+                    _heights[curXInd, curYInd] = _contourHeights[lineInd];
+                    _closestContourIds[curXInd, curYInd] = lineInd;
                     if (coordNum != 0)
                     {
                         var (prevX, prevY) = linesCoords[lineInd][coordNum - 1];
@@ -103,7 +166,7 @@ namespace Utils
                             prevYInd, curYInd,
                             prevX, curX,
                             prevY, curY,
-                            lineInd, _heights[lineInd]
+                            lineInd, _contourHeights[lineInd]
                             );
                     }
 
@@ -167,94 +230,13 @@ namespace Utils
                         (xAtBottomBound >= xLeftBound - eps && xAtBottomBound <= xRightBound + eps) ||
                         (xAtUpperBound >= xLeftBound - eps && xAtUpperBound <= xRightBound + eps))
                     {
-                        _filled[xInd, yInd] = true;
-                        _filledHeights[xInd, yInd] = fillHeight;
-                        _filledLinesInds[xInd, yInd] = fillLineInd;
+                        _isFilled[xInd, yInd] = true;
+                        _heights[xInd, yInd] = fillHeight;
+                        _closestContourIds[xInd, yInd] = fillLineInd;
                     }
                 }
             }
         }
-        
-        /* unfinished method, not used */
-        private void InterpolateGrid()
-        {
-            var gridStack = new Dictionary<int, (int, int)>[_xSize, _ySize];
-            for (var i = 0; i < _xSize; ++i)
-            {
-                for (var j = 0; j < _ySize; ++j)
-                {
-                    gridStack[i, j] = new Dictionary<int, (int, int)>();
-                }
-            }
-            
-            for (var i = 0; i < _xSize; ++i)
-            {
-                for (var j = 0; j < _ySize; ++j)
-                {
-                    if (_filled[i, j])
-                    {
-                        FillAround(gridStack, 
-                            i, j, 
-                            _filledLinesInds[i, j], _filledHeights[i, j],
-                            0, 0);    
-                    }
-                }
-            }
 
-
-            bool allFilled = false;
-            while (!allFilled)
-            {
-                for (var i = 0; i < _xSize; ++i)
-                {
-                    for (var j = 0; j < _ySize; ++j)
-                    {
-                        if (!_filled[i, j])
-                        {
-                            
-                        }
-                    }
-                }
-                
-            }
-        }
-
-        /* unfinished method, not used */
-        private void FillAround(Dictionary<int, (int, int)>[,] gridStack,
-            int x,
-            int y,
-            int lineInd,
-            double height,
-            int forwardSteps,
-            int diagSteps
-        )
-        {
-            var leftBound = Math.Max(x - 1, 0);
-            var rightBound = Math.Min(x + 1, _xSize - 1);
-
-            var bottomBound = Math.Max(y - 1, 0);
-            var upperBound = Math.Max(y + 1, _ySize - 1);
-            
-            for (int i = leftBound; i <= rightBound; i+=1)
-            {
-                for (int j = bottomBound; j <= upperBound; j+=1)
-                {
-                    if (i == x && j == y)
-                        continue;
-                    var curStack = gridStack[i,j];
-                    if (curStack.Count < 2)
-                    {
-                        if (curStack.ContainsKey(lineInd))
-                        {
-                            var (curForwardStep, curDiagStep) = curStack[lineInd];
-                        }
-                        else
-                        {
-                            
-                        }
-                    }
-                }
-            }
-        }
     }
 }

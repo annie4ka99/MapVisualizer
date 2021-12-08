@@ -4,17 +4,28 @@
     <e p="C:\Users\Anna\.Rider2019.1\system\extResources" t="IncludeRecursive" />
     <e p="C:\Users\Anna\.Rider2019.1\system\resharper-host\local\Transient\ReSharperHost\v191\SolutionCaches\_MapVisualizer.-1431098857.00" t="ExcludeRecursive" />
     <e p="D:\Unity\projects\MapVisualizer" t="IncludeRecursive">
+      <e p="Assembly-CSharp-Editor.csproj" t="IncludeRecursive" />
       <e p="Assembly-CSharp.csproj" t="IncludeRecursive" />
       <e p="Assets" t="Include">
         <e p="Data" t="Include">
           <e p="output.txt" t="Include" />
         </e>
         <e p="Scripts" t="Include">
+          <e p="Editor" t="Include">
+            <e p="ImageBuilder.cs" t="Include" />
+          </e>
           <e p="ImageBuilder.cs" t="Include" />
           <e p="Utils" t="Include">
+            <e p="CellStatus.cs" t="Include" />
             <e p="ContourLinesReader.cs" t="Include" />
             <e p="DataStructure.cs" t="Include" />
             <e p="HeightMapBuilder.cs" t="Include" />
+            <e p="Interpolator.cs" t="Include" />
+            <e p="interpolators" t="Include">
+              <e p="EuclideanDistInterpolator.cs" t="Include" />
+              <e p="ManhattanDistInterpolator.cs" t="Include" />
+            </e>
+            <e p="MapRotator.cs" t="Include" />
           </e>
         </e>
       </e>
