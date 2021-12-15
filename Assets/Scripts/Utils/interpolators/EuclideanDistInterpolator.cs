@@ -6,9 +6,16 @@ namespace Utils.interpolators
 {
     public class EuclideanDistInterpolator : Interpolator
     {
-        public void InterpolateGrid(int xSize, int ySize, int[,] closestContourIds, bool[,] isFilled, 
-            Func<int, int, bool> outOfMapBounds, double[,] heights, double[] contourHeights)
+        public void InterpolateGrid(int xSize, int ySize, int[,] contourIds, bool[,] isFilled, 
+            Func<int, int, bool> outOfMapBounds, double[,] heights, double[] contourHeights,
+            Action<float> updateProgressBar)
         {
+            long progress = 0;
+            long totalSize = xSize * ySize;
+
+            var progressStep = totalSize / 100;
+            long curProgressSteps = 0;
+            
             var gridStack = new Dictionary<int, (int, int)>[xSize, ySize];
             for (var i = 0; i < xSize; ++i)
             {
@@ -28,16 +35,22 @@ namespace Utils.interpolators
                 {
                     if (isFilled[i, j])
                     {
-                        changed += FillAround(gridStack,
+                        var (changedNum, _) = FillAround(gridStack,
                             processedOnPrevStep,
                             i, j, 
-                            closestContourIds[i, j],
+                            contourIds[i, j],
                             0, 0,
                             xSize, ySize,
                             isFilled,
-                            outOfMapBounds);    
+                            outOfMapBounds);
+                        changed += changedNum;
+                        progress++;
+                        heights[i, j] = -1;
                     }
                 }
+                if (progress <= (curProgressSteps + 1) * progressStep) continue;
+                curProgressSteps = progress / progressStep;
+                updateProgressBar((float) progress / totalSize);
             }
 
             while (changed != 0)
@@ -67,7 +80,7 @@ namespace Utils.interpolators
                         diagStepsWithMinDist = curDiagSteps;
                     }
                     
-                    changed += FillAround(gridStack,
+                    var (changedNum, filledNum) = FillAround(gridStack,
                         processedOnCurStep,
                         i, j,
                         lineIdWithMinDist,
@@ -75,6 +88,12 @@ namespace Utils.interpolators
                         xSize, ySize,
                         isFilled,
                         outOfMapBounds);
+
+                    changed += changedNum;
+                    progress += filledNum;
+                    if (progress <= (curProgressSteps + 1) * progressStep) continue;
+                    curProgressSteps = progress / progressStep;
+                    updateProgressBar((float) progress / totalSize);
                 }
                     
                 processedOnPrevStep = new HashSet<(int, int)>(processedOnCurStep);
@@ -84,15 +103,20 @@ namespace Utils.interpolators
             {
                 for (var j = 0; j < ySize; ++j)
                 {
-                    if (isFilled[i, j] || outOfMapBounds(i, j)) continue;
-                   
+                    if (isFilled[i, j]) continue;
+                    
                     var curStack = gridStack[i, j];
                     var lineIds = new List<int>(curStack.Keys);
                     if (lineIds.Count == 0) continue;
                     
                     var line1 = lineIds[0];
                     var line2 = lineIds.Count == 1 ? line1 : lineIds[1];
-
+                    var height1 = contourHeights[line1];
+                    var height2 = contourHeights[line2];
+                    
+                    if (outOfMapBounds(i, j) && height1 <= 0.0 &&  height2 <= 0.0)
+                        continue;
+                    
                     var (line1FwdSteps, line1DiagSteps) = curStack[line1];
                     var (line2FwdSteps, line2DiagSteps) = curStack[line2];
                     var dist1 = CalculateDist(line1FwdSteps, line1DiagSteps);
@@ -106,7 +130,7 @@ namespace Utils.interpolators
             }
         }
 
-        private int FillAround(Dictionary<int, (int, int)>[,] gridStack,
+        private (int, int) FillAround(Dictionary<int, (int, int)>[,] gridStack,
             HashSet<(int,int)> processed,
             int x,
             int y,
@@ -120,6 +144,7 @@ namespace Utils.interpolators
         )
         {
             var changed = 0;
+            var filledNum = 0;
             
             var leftBound = Math.Max(x - 1, 0);
             var rightBound = Math.Min(x + 1, xSize - 1);
@@ -131,13 +156,18 @@ namespace Utils.interpolators
             {
                 for (var j = bottomBound; j <= upperBound; j+=1)
                 {
-                    if ((i == x && j == y) || filled[i, j] || outOfMapBounds(i,j))
+                    if ((i == x && j == y) || filled[i, j] 
+//                                           || outOfMapBounds(i,j)
+                                           )
                         continue;
                     
                     var curStack = gridStack[i,j];
                     var newFwdSteps = fwdSteps + (i == x || j == y ? 1 : 0);
                     var newDiagSteps = diagSteps + (i == x || j == y ? 0 : 1);
                     var newDist = CalculateDist(newFwdSteps, newDiagSteps);
+
+                    if (curStack.Count > 1)
+                        filledNum++;
                     
                     if (curStack.ContainsKey(lineInd))
                     {
@@ -185,7 +215,7 @@ namespace Utils.interpolators
                 }
             }
 
-            return changed;
+            return (changed, filledNum);
         }
 
         private static double CalculateDist(int fwdSteps, int diagSteps)

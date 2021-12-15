@@ -38,7 +38,7 @@ namespace Utils
             return contourLinesCoords;
         }
 
-        private static string ReadMapPart(string directoryPath, int mapPartNum)
+        /*private static string ReadMapPart(string directoryPath, int mapPartNum)
         {
             var files = Directory.GetFiles(directoryPath, "*.json");
             var file = files[mapPartNum];
@@ -46,6 +46,15 @@ namespace Utils
             using (var reader = new StreamReader(file))
             {
                  content = reader.ReadToEnd();
+            }
+            return content;
+        }*/
+        private static string ReadMapPart(string filePath)
+        {
+            string content;
+            using (var reader = new StreamReader(filePath))
+            {
+                content = reader.ReadToEnd();
             }
             return content;
         }
@@ -105,9 +114,10 @@ namespace Utils
             return contourLines;
         }
         
-        public static (List<double>, List<List<(double, double)>>) ReadMetricContourLines(int mapPartNum)
+        public static (List<double>, List<List<(double, double)>>) ReadMetricContourLines(string filePath)
         {
-            var mapPart = ReadMapPart("Assets/Data/map/", mapPartNum);
+            var mapPart = ReadMapPart(filePath);
+//            var mapPart = ReadMapPart("Assets/Data/map/", mapPartNum);
          
             var contourLines = GetContourLines(mapPart);
             foreach (var layerName in contourLines.Keys)

@@ -9,11 +9,12 @@ namespace Utils
         {
             var ((upX, upY), (rightX, rightY), (bottomX, bottomY), (leftX, leftY)) = GetMapBounds(linesCoords);
 
-            var (centerX, centerY) = (bottomX, bottomY);
-            var xDelta = rightX - bottomX;
-            var yDelta = rightY - bottomY;
-            var angleTg = yDelta / xDelta;
-            var angleCtg = xDelta / yDelta;
+            var (centerX, centerY) = (rightX, rightY);
+
+            var xDelta = rightX - upX;
+            var yDelta = upY - rightY;
+            var angleTg = xDelta / yDelta;
+            var angleCtg = yDelta / xDelta;
             var angleSin = Math.Sqrt(1.0 / (1.0 + Math.Pow(angleCtg, 2)));
             var angleCos = Math.Sqrt(1.0 / (1.0 + Math.Pow(angleTg, 2)));
 

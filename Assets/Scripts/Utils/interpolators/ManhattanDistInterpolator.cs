@@ -6,95 +6,113 @@ namespace Utils.interpolators
 {
     public class ManhattanDistInterpolator : Interpolator
     {
-        public void InterpolateGrid(int xSize, int ySize, int[,] closestContourIds, bool[,] isFilled, 
-            Func<int, int, bool> outOfMapBounds, double[,] heights, double[] contourHeights)
+        public void InterpolateGrid(int xSize, int ySize, int[,] contourIds, bool[,] isFilled, 
+            Func<int, int, bool> outOfMapBounds, double[,] heights, double[] contourHeights,
+            Action<float> updateProgressBar)
         {
             // Number of processed cells
             long progress = 0;
             
             // Total number of cells
             long totalSize = xSize * ySize;
+
+            var progressStep = totalSize / 100;
+            long curProgressSteps = 0;
  
             // Cell processing order
             var q = new Queue<(int, int)>();
- 
+            var cellStatuses = new CellStatus[xSize, ySize];
+            
             // FIRST TRAVERSAL
             // For every cell (closest contour id, distance) pair
             var closestContour1 = new (int, int)[xSize, ySize];
-            // For every cell contains 'true' if there is final answer for it in closestContourIds1
-            var cellStatuses = new CellStatus[xSize, ySize];
  
             // SECOND TRAVERSAL
             // For every cell (closest contour id, distance) pair
             var closestContour2 = new (int, int)[xSize, ySize];
-            // For every cell contains 'true' if there is final answer for it in closestContourIds2
  
             // Initialization
             for (var i = 0; i < xSize; ++i)
             {
                 for (var j = 0; j < ySize; ++j)
                 {
-                    closestContour1[i, j] = (closestContourIds[i, j], 0);
-                    closestContour2[i, j] = (closestContourIds[i, j], 0);
+                    closestContour1[i, j] = (contourIds[i, j], 0);
+                    closestContour2[i, j] = (contourIds[i, j], 0);
                     cellStatuses[i, j] = isFilled[i, j] ? CellStatus.Done : CellStatus.Empty;
-                    if (isFilled[i, j]) 
-                    {
-                        q.Enqueue((i, j));
-                        progress++;
-                    }
-                    if (outOfMapBounds(i, j))
-                    {
-                        cellStatuses[i, j] = CellStatus.Done;
-                        progress++;
-                    }
+                    if (!isFilled[i, j]) continue;
+                    q.Enqueue((i, j));
+                    progress++;
                 }
+                if (progress <= (curProgressSteps + 1) * progressStep) continue;
+                curProgressSteps = progress / progressStep;
+                updateProgressBar((float) progress / totalSize);
             }
 
 
             while (q.Count > 0)
             {
                 progress += Process(q, closestContour1, closestContour2, 
-                    cellStatuses, xSize, ySize);
+                    cellStatuses, xSize, ySize, outOfMapBounds,  contourHeights);
+                if (progress <= (curProgressSteps + 1) * progressStep) continue;
+                curProgressSteps = progress / progressStep;
+                updateProgressBar((float) progress / totalSize);
             }
             
             // Evaluate heights
-            
-            Debug.Log("Evaluating heights");
-            Console.WriteLine("Evaluating heights");
             for (var i = 0; i < xSize; ++i) 
             {
                 for (var j = 0; j < ySize; ++j) 
                 {
-                   // -1 is special height value for contour cells to colour them blue
                     if (isFilled[i, j])
                     {
                         heights[i, j] = -1;
                         continue;
                     }
-                    if (outOfMapBounds(i, j) || isFilled[i, j]) continue;
-                    isFilled[i, j] = true;
+                    progress++; 
+
+                    var (contour1, dist1) = closestContour1[i, j];
+                    var (contour2, dist2) = closestContour2[i, j];
+                    var height1 = contourHeights[contour1];
+                    var height2 = contourHeights[contour2];
                     
-                    // If second traversal didn't reach cell, then it's isolated inside a single contour and has height of this contour.
-                    // Else it has weighted average height of two closest contours.
-                    if (closestContour2[i, j].Item2 == 0)
+//                    if (outOfMapBounds(i, j) &&  height1 <= 0.0)
+//                        continue;
+
+                    if (outOfMapBounds(i, j) && height1 <= 0.0
+                                             && (dist2 == 0 || height2 <= 0.0)
+                    )
                     {
-                        heights[i, j] = contourHeights[closestContour1[i, j].Item1];
+                        continue;
                     }
-                    else 
+
+                    // If second contour didn't reach cell, then it's isolated inside a single contour and has height of this contour.
+                    // Else it has weighted average height of two closest contours.
+                    if (dist2 == 0)
+                    {
+                        heights[i, j] = height1;
+                    }
+                    else
                     {
                         heights[i, j] = CalculateWeightedHeight(
-                            contourHeights[closestContour1[i, j].Item1],
-                            closestContour1[i, j].Item2,
-                            contourHeights[closestContour2[i, j].Item1],
-                            closestContour2[i, j].Item2);
+                            height1,
+                            dist1,
+                            height2,
+                            dist2);
                     }
+                    
+                    isFilled[i, j] = true;
                 }
+                if (progress <= (curProgressSteps + 1) * progressStep) continue;
+                curProgressSteps = progress / progressStep;
+                updateProgressBar((float) progress / totalSize);
             }
         }
+        
 
-        // Process adjacent cells. Filters data that can be written to a cell. Returns number of filled cells.
+        // Process adjacent cells. Returns number of filled cells.
         private static int Process(Queue<(int, int)> q, (int, int)[,] closestContours1, (int, int)[,] closestContours2, 
-            CellStatus[,] cellStatuses, int xSize, int ySize)
+            CellStatus[,] cellStatuses, int xSize, int ySize, Func<int, int, bool> outOfMapBounds, 
+            double[] contourHeights)
         {
             var progress = 0;
  
@@ -111,56 +129,63 @@ namespace Utils.interpolators
                 (curX, curY + 1),
                 (curX, curY - 1)
             };
- 
+
+//            var isZeroHeight = contourHeights[contour1] <= 0.0;
+
             foreach (var (x, y) in cells)
             {
-                if (x >= 0 && x < xSize && y >= 0 && y < ySize && cellStatuses[x, y] != CellStatus.Done)
+                if (x < 0 || x >= xSize || y < 0 || y >= ySize || cellStatuses[x, y] == CellStatus.Done) continue;
+                var cellStatus = cellStatuses[x, y];
+                /*if (outOfMapBounds(x, y) && cellStatus == CellStatus.Empty && isZeroHeight)
                 {
-                    var cellStatus = cellStatuses[x, y];
-                    if (curStatus == CellStatus.Wait)
+                    closestContours1[x, y] = (contour1, distance1 + 1);
+                    cellStatuses[x, y] = CellStatus.Done;
+                    q.Enqueue((x, y));
+                    progress++;
+                    continue;
+                }*/
+                if (curStatus == CellStatus.Wait)
+                {
+                    if (cellStatus == CellStatus.Empty)
                     {
-                        if (cellStatus == CellStatus.Empty)
-                        {
-                            closestContours1[x, y] = (contour1, distance1 + 1);
-                            cellStatuses[x, y] = CellStatus.Wait;
-                            q.Enqueue((x, y));
-                            progress++;
-                        }
-                        else if (closestContours1[x, y].Item1 != contour1)
+                        closestContours1[x, y] = (contour1, distance1 + 1);
+                        cellStatuses[x, y] = CellStatus.Wait;
+                        q.Enqueue((x, y));
+                    }
+                    else if (closestContours1[x, y].Item1 != contour1)
+                    {
+                        closestContours2[x, y] = (contour1, distance1 + 1);
+                        cellStatuses[x, y] = CellStatus.Done;
+                        q.Enqueue((x, y));
+                        progress++;
+                    }
+                }
+                else
+                {
+                    if (cellStatus == CellStatus.Empty)
+                    {
+                        closestContours1[x, y] = (contour1, distance1 + 1);
+                        closestContours2[x, y] = (contour2, distance2 + 1);
+                        cellStatuses[x, y] = CellStatus.Done;
+                        q.Enqueue((x, y));
+                        progress++;
+                    }
+                    else
+                    {
+                        var (cellContour, _) = closestContours1[x, y];
+                        if (cellContour != contour1)
                         {
                             closestContours2[x, y] = (contour1, distance1 + 1);
                             cellStatuses[x, y] = CellStatus.Done;
                             q.Enqueue((x, y));
                             progress++;
                         }
-                    }
-                    else
-                    {
-                        if (cellStatus == CellStatus.Empty)
+                        else if (cellContour != contour2)
                         {
-                            closestContours1[x, y] = (contour1, distance1 + 1);
                             closestContours2[x, y] = (contour2, distance2 + 1);
                             cellStatuses[x, y] = CellStatus.Done;
                             q.Enqueue((x, y));
                             progress++;
-                        }
-                        else
-                        {
-                            var (cellContour, _) = closestContours1[x, y];
-                            if (cellContour != contour1)
-                            {
-                                closestContours2[x, y] = (contour1, distance1 + 1);
-                                cellStatuses[x, y] = CellStatus.Done;
-                                q.Enqueue((x, y));
-                                progress++;
-                            }
-                            else if (cellContour != contour2)
-                            {
-                                closestContours2[x, y] = (contour2, distance2 + 1);
-                                cellStatuses[x, y] = CellStatus.Done;
-                                q.Enqueue((x, y));
-                                progress++;
-                            }
                         }
                     }
                 }

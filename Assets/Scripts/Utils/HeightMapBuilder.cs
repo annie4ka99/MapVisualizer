@@ -27,7 +27,7 @@ namespace Utils
         
         public (double[,], bool[,]) Build(List<double> heights, 
             List<List<(double, double)>> linesCoords, 
-            Interpolator interpolator)
+            Interpolator interpolator, Action<float> updateProgress)
         {
             _contourHeights = heights.ToArray();
             
@@ -38,13 +38,13 @@ namespace Utils
             FillAxesBounds();
 
             interpolator.InterpolateGrid(_xSize, _ySize, _closestContourIds, _isFilled, 
-                OutOfMapBounds, _heights, _contourHeights);
+                OutOfMapBounds, _heights, _contourHeights, updateProgress);
             
             return (_heights, _isFilled);
 
         }
         
-        private (double, double, double, double) GetCoordsBounds(List<List<(double, double)>> linesCoords)
+        private static (double, double, double, double) GetCoordsBounds(List<List<(double, double)>> linesCoords)
         {
             var minX = Double.MaxValue;
             var maxX = Double.MinValue;
@@ -116,7 +116,7 @@ namespace Utils
         {
             var outOfX = x < _xLeftBounds[y] || x > _xRightBounds[y];
             var outOfY = y < _yBottomBounds[x] || y > _yUpperBounds[x];
-            return outOfX || outOfY;
+            return outOfX && outOfY;
         }
         
         private void FillGridFromContours(
