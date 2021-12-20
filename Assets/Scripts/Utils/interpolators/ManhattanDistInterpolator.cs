@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace Utils.interpolators
@@ -38,7 +39,7 @@ namespace Utils.interpolators
                 {
                     closestContour1[i, j] = (contourIds[i, j], 0);
                     closestContour2[i, j] = (contourIds[i, j], 0);
-                    cellStatuses[i, j] = isFilled[i, j] ? CellStatus.Done : CellStatus.Empty;
+                    cellStatuses[i, j] = isFilled[i, j] ? CellStatus.Contour : CellStatus.Empty;
                     if (!isFilled[i, j]) continue;
                     q.Enqueue((i, j));
                     progress++;
@@ -53,11 +54,13 @@ namespace Utils.interpolators
             {
                 progress += Process(q, closestContour1, closestContour2, 
                     cellStatuses, xSize, ySize, outOfMapBounds,  contourHeights);
+                
                 if (progress <= (curProgressSteps + 1) * progressStep) continue;
                 curProgressSteps = progress / progressStep;
                 updateProgressBar((float) progress / totalSize);
             }
-            
+
+            var cellsWithDiffContourHeights = 0;
             // Evaluate heights
             for (var i = 0; i < xSize; ++i) 
             {
@@ -65,7 +68,7 @@ namespace Utils.interpolators
                 {
                     if (isFilled[i, j])
                     {
-                        heights[i, j] = -1;
+//                        heights[i, j] = -1;
                         continue;
                     }
                     progress++; 
@@ -93,6 +96,10 @@ namespace Utils.interpolators
                     }
                     else
                     {
+                        if (height1 != height2)
+                        {
+                            cellsWithDiffContourHeights += 1;
+                        }
                         heights[i, j] = CalculateWeightedHeight(
                             height1,
                             dist1,
@@ -134,7 +141,8 @@ namespace Utils.interpolators
 
             foreach (var (x, y) in cells)
             {
-                if (x < 0 || x >= xSize || y < 0 || y >= ySize || cellStatuses[x, y] == CellStatus.Done) continue;
+                if (x < 0 || x >= xSize || y < 0 || y >= ySize 
+                    || cellStatuses[x, y] == CellStatus.Done || cellStatuses[x,y] == CellStatus.Contour) continue;
                 var cellStatus = cellStatuses[x, y];
                 /*if (outOfMapBounds(x, y) && cellStatus == CellStatus.Empty && isZeroHeight)
                 {
@@ -144,7 +152,7 @@ namespace Utils.interpolators
                     progress++;
                     continue;
                 }*/
-                if (curStatus == CellStatus.Wait)
+                if (curStatus == CellStatus.Wait || curStatus == CellStatus.Contour)
                 {
                     if (cellStatus == CellStatus.Empty)
                     {

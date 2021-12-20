@@ -99,7 +99,7 @@ namespace Utils
                 {
                     var height = feature.Fields["SC_4"];
                     if (height == "")
-                        height = "0";
+                        continue;
                     var linesCoords = ParseContourLinesCoords(feature.Geometry);
                     foreach (var lineCoords in linesCoords)
                     {

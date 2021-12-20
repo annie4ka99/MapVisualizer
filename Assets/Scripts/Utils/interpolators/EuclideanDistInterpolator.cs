@@ -45,7 +45,7 @@ namespace Utils.interpolators
                             outOfMapBounds);
                         changed += changedNum;
                         progress++;
-                        heights[i, j] = -1;
+//                        heights[i, j] = -1;
                     }
                 }
                 if (progress <= (curProgressSteps + 1) * progressStep) continue;
@@ -55,9 +55,7 @@ namespace Utils.interpolators
 
             while (changed != 0)
             {
-//                Debug.Log((changed));
-//                Console.WriteLine(changed);
-                
+
                 var processedOnCurStep = new HashSet<(int, int)>();
                 changed = 0;
 
@@ -117,6 +115,13 @@ namespace Utils.interpolators
                     if (outOfMapBounds(i, j) && height1 <= 0.0 &&  height2 <= 0.0)
                         continue;
                     
+                    isFilled[i, j] = true;
+                    if (line1 == line2)
+                    {
+                        heights[i, j] = height1;
+                        continue;
+                    }
+                    
                     var (line1FwdSteps, line1DiagSteps) = curStack[line1];
                     var (line2FwdSteps, line2DiagSteps) = curStack[line2];
                     var dist1 = CalculateDist(line1FwdSteps, line1DiagSteps);
@@ -124,13 +129,13 @@ namespace Utils.interpolators
                     var height = CalculateWeightedHeight(
                         contourHeights[line1], dist1,
                         contourHeights[line2], dist2);
-                    isFilled[i, j] = true;
+                    
                     heights[i, j] = height;
                 }
             }
         }
 
-        private (int, int) FillAround(Dictionary<int, (int, int)>[,] gridStack,
+        private static (int, int) FillAround(Dictionary<int, (int, int)>[,] gridStack,
             HashSet<(int,int)> processed,
             int x,
             int y,

@@ -44,7 +44,7 @@ namespace Utils
 
         }
         
-        private static (double, double, double, double) GetCoordsBounds(List<List<(double, double)>> linesCoords)
+        public static (double, double, double, double) GetCoordsBounds(List<List<(double, double)>> linesCoords)
         {
             var minX = Double.MaxValue;
             var maxX = Double.MinValue;
