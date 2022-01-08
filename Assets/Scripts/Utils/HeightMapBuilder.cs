@@ -9,6 +9,7 @@ namespace Utils
         private readonly int _ySize;
         
         private bool[,] _isFilled;
+        private bool[,] _isContour;
         private double[,] _heights;
         private int[,] _closestContourIds;
         private double[] _contourHeights;
@@ -25,7 +26,7 @@ namespace Utils
         }
         
         
-        public (double[,], bool[,]) Build(List<double> heights, 
+        public (double[,], bool[,], bool[,]) Build(List<double> heights, 
             List<List<(double, double)>> linesCoords, 
             Interpolator interpolator, Action<float> updateProgress)
         {
@@ -40,7 +41,7 @@ namespace Utils
             interpolator.InterpolateGrid(_xSize, _ySize, _closestContourIds, _isFilled, 
                 OutOfMapBounds, _heights, _contourHeights, updateProgress);
             
-            return (_heights, _isFilled);
+            return (_heights, _isFilled, _isContour);
 
         }
         
@@ -127,10 +128,14 @@ namespace Utils
             var yStep = (maxY - minY) / (_ySize);
             
             _isFilled = new bool[_xSize, _ySize];
+            _isContour = new bool[_xSize,_ySize];
             for (var i = 0; i < _xSize; ++i)
-                for (var j = 0; j < _ySize; ++j)
-                    _isFilled[i, j] = false;
-            
+            for (var j = 0; j < _ySize; ++j)
+            {
+                _isFilled[i, j] = false;
+                _isContour[i, j] = false;
+            }
+
             _heights = new double[_xSize,_ySize];
             _closestContourIds = new int[_xSize,_ySize];
             
@@ -151,6 +156,8 @@ namespace Utils
                         curYInd = _ySize - 1;
                     
                     _isFilled[curXInd,curYInd] = true;
+                    _isContour[curXInd,curYInd] = true;
+                    
                     _heights[curXInd, curYInd] = _contourHeights[lineInd];
                     _closestContourIds[curXInd, curYInd] = lineInd;
                     if (coordNum != 0)
@@ -229,6 +236,8 @@ namespace Utils
                         (xAtUpperBound >= xLeftBound - eps && xAtUpperBound <= xRightBound + eps))
                     {
                         _isFilled[xInd, yInd] = true;
+                        _isContour[xInd, yInd] = true;
+                        
                         _heights[xInd, yInd] = fillHeight;
                         _closestContourIds[xInd, yInd] = fillLineInd;
                     }

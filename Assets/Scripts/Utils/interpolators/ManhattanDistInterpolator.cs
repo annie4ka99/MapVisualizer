@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEditor;
-using UnityEngine;
 
 namespace Utils.interpolators
 {
@@ -22,14 +20,13 @@ namespace Utils.interpolators
  
             // Cell processing order
             var q = new Queue<(int, int)>();
+            
             var cellStatuses = new CellStatus[xSize, ySize];
             
-            // FIRST TRAVERSAL
-            // For every cell (closest contour id, distance) pair
+            // For every cell (1st closest contour id, distance) pair
             var closestContour1 = new (int, int)[xSize, ySize];
  
-            // SECOND TRAVERSAL
-            // For every cell (closest contour id, distance) pair
+            // For every cell (2nd closest contour id, distance) pair
             var closestContour2 = new (int, int)[xSize, ySize];
  
             // Initialization
@@ -53,24 +50,21 @@ namespace Utils.interpolators
             while (q.Count > 0)
             {
                 progress += Process(q, closestContour1, closestContour2, 
-                    cellStatuses, xSize, ySize, outOfMapBounds,  contourHeights);
+                    cellStatuses, xSize, ySize);
                 
                 if (progress <= (curProgressSteps + 1) * progressStep) continue;
                 curProgressSteps = progress / progressStep;
                 updateProgressBar((float) progress / totalSize);
             }
 
-            var cellsWithDiffContourHeights = 0;
             // Evaluate heights
             for (var i = 0; i < xSize; ++i) 
             {
                 for (var j = 0; j < ySize; ++j) 
                 {
                     if (isFilled[i, j])
-                    {
-//                        heights[i, j] = -1;
                         continue;
-                    }
+                    
                     progress++; 
 
                     var (contour1, dist1) = closestContour1[i, j];
@@ -78,9 +72,6 @@ namespace Utils.interpolators
                     var height1 = contourHeights[contour1];
                     var height2 = contourHeights[contour2];
                     
-//                    if (outOfMapBounds(i, j) &&  height1 <= 0.0)
-//                        continue;
-
                     if (outOfMapBounds(i, j) && height1 <= 0.0
                                              && (dist2 == 0 || height2 <= 0.0)
                     )
@@ -96,10 +87,6 @@ namespace Utils.interpolators
                     }
                     else
                     {
-                        if (height1 != height2)
-                        {
-                            cellsWithDiffContourHeights += 1;
-                        }
                         heights[i, j] = CalculateWeightedHeight(
                             height1,
                             dist1,
@@ -118,8 +105,7 @@ namespace Utils.interpolators
 
         // Process adjacent cells. Returns number of filled cells.
         private static int Process(Queue<(int, int)> q, (int, int)[,] closestContours1, (int, int)[,] closestContours2, 
-            CellStatus[,] cellStatuses, int xSize, int ySize, Func<int, int, bool> outOfMapBounds, 
-            double[] contourHeights)
+            CellStatus[,] cellStatuses, int xSize, int ySize)
         {
             var progress = 0;
  
@@ -129,29 +115,19 @@ namespace Utils.interpolators
             var (contour1, distance1) = closestContours1[curX, curY];
             var (contour2, distance2) = closestContours2[curX, curY];
             // Adjacent cells coordinates
-            var cells = new List<(int, int)>()
+            var cells = new List<(int, int)>
             {
                 (curX + 1, curY),
                 (curX - 1, curY),
                 (curX, curY + 1),
                 (curX, curY - 1)
             };
-
-//            var isZeroHeight = contourHeights[contour1] <= 0.0;
-
+            
             foreach (var (x, y) in cells)
             {
                 if (x < 0 || x >= xSize || y < 0 || y >= ySize 
                     || cellStatuses[x, y] == CellStatus.Done || cellStatuses[x,y] == CellStatus.Contour) continue;
                 var cellStatus = cellStatuses[x, y];
-                /*if (outOfMapBounds(x, y) && cellStatus == CellStatus.Empty && isZeroHeight)
-                {
-                    closestContours1[x, y] = (contour1, distance1 + 1);
-                    cellStatuses[x, y] = CellStatus.Done;
-                    q.Enqueue((x, y));
-                    progress++;
-                    continue;
-                }*/
                 if (curStatus == CellStatus.Wait || curStatus == CellStatus.Contour)
                 {
                     if (cellStatus == CellStatus.Empty)

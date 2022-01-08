@@ -41,8 +41,7 @@ namespace Utils.interpolators
                             contourIds[i, j],
                             0, 0,
                             xSize, ySize,
-                            isFilled,
-                            outOfMapBounds);
+                            isFilled);
                         changed += changedNum;
                         progress++;
 //                        heights[i, j] = -1;
@@ -84,8 +83,7 @@ namespace Utils.interpolators
                         lineIdWithMinDist,
                         fwdStepsWithMinDist, diagStepsWithMinDist,
                         xSize, ySize,
-                        isFilled,
-                        outOfMapBounds);
+                        isFilled);
 
                     changed += changedNum;
                     progress += filledNum;
@@ -144,8 +142,7 @@ namespace Utils.interpolators
             int diagSteps,
             int xSize,
             int ySize,
-            bool[,] filled,
-            Func<int, int, bool> outOfMapBounds
+            bool[,] filled
         )
         {
             var changed = 0;
@@ -161,9 +158,7 @@ namespace Utils.interpolators
             {
                 for (var j = bottomBound; j <= upperBound; j+=1)
                 {
-                    if ((i == x && j == y) || filled[i, j] 
-//                                           || outOfMapBounds(i,j)
-                                           )
+                    if ((i == x && j == y) || filled[i, j])
                         continue;
                     
                     var curStack = gridStack[i,j];
