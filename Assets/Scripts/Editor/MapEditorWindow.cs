@@ -130,8 +130,7 @@ namespace Editor
 
 
         private void CreateTerrainTile(string tileName, int xPos, int yPos, int width, int length , float height, 
-            float[,] heightMap, GameObject parent, Color[,] colorMap
-            )
+            float[,] heightMap, GameObject parent, Texture2D texture)
         {
             const int detailResolution = 1024;
             const int detailResolutionPerPatch = 32;
@@ -150,22 +149,12 @@ namespace Editor
             };
             
             terrainData.SetDetailResolution(detailResolution, detailResolutionPerPatch);
+            
             terrainData.SetHeights(0, 0, heightMap);
             
             
             if (_isTerrainColored)
             {
-                var texture = new Texture2D(width - 1, length - 1);
-                for (var y = 0; y < length - 1; y++)
-                {
-                    for (var x = 0; x < width - 1; x++)
-                    {
-                        texture.SetPixel(x, y, colorMap[x, y]);
-                    }
-                }
-
-                texture.Apply();
-
                 var terrainLayers = new TerrainLayer[1];
                 terrainLayers[0] = new TerrainLayer
                 {
@@ -306,13 +295,13 @@ namespace Editor
             var heightMapBuilder = new HeightMapBuilder(_width, _height);
             var interpolator = GetInterpolator();
 
-            var (filledHeights, filled, isContour) = heightMapBuilder.Build(_contoursHeights, _contoursCoords, interpolator,
-                ShowTerrainProgressBar);
-            EditorUtility.ClearProgressBar();
-            ShowBlurTerrainProgressBar(0.0f);
+            var (filledHeights, filled, isContour) = heightMapBuilder.Build(_contoursHeights, _contoursCoords,
+                interpolator, ShowTerrainProgressBar);
 
             if (_isBlurred)
             {
+                EditorUtility.ClearProgressBar();
+                ShowBlurTerrainProgressBar(0.0f);
                 filledHeights = BlurHeightMap(filled, filledHeights);
             }
             
@@ -321,7 +310,8 @@ namespace Editor
 
             var heightScale = maxHeight - minHeight;
 
-            var colors = new Color[_width, _height];
+            
+            var edgeColor = new Color[_width, _height];
             for (var y = 0; y < _height; y++)
             {
                 for (var x = 0; x < _width; x++)
@@ -330,17 +320,48 @@ namespace Editor
                     {
                         if (isContour[x, y])
                         {
-                            colors[x, y] = Color.black;
+                            edgeColor[x, y] = Color.black;
                         }
                         else
                         {
-                            colors[x, y] = Color.Lerp(Color.green, Color.red,
+                            edgeColor[x, y] = Color.Lerp(Color.green, Color.red,
                                 (float) ((filledHeights[x, y] - minHeight) / heightScale));
                         }
                     }
                     else
                     {
-                        colors[x, y] = Color.white;
+                        edgeColor[x, y] = Color.white;
+                    }
+                }
+            }
+            
+            var vertexHeight = new float[_width + 1, _height + 1];
+            for (var y = 0; y <= _height; y++)
+            {
+                for (var x = 0; x <= _width; x++)
+                {
+                    var adjSumHeight = 0.0;
+                    var adjNum = 0;
+                    for (var adjX = x - 1; adjX <= x; ++adjX)
+                    {
+                        for (var adjY = y - 1; adjY <= y; ++adjY)
+                        {
+                            if (adjX < 0 || adjX >= _width || 
+                                adjY < 0 || adjY >= _height ||
+                                !filled[adjX, adjY])
+                                continue;
+                            adjSumHeight += filledHeights[adjX, adjY];
+                            adjNum++;
+                        }
+                    }
+
+                    if (adjNum == 0)
+                    {
+                        vertexHeight[x, y] = 0f;
+                    }
+                    else
+                    {
+                        vertexHeight[x, y] = (float) ((adjSumHeight / adjNum - minHeight) / heightScale);
                     }
                 }
             }
@@ -348,41 +369,65 @@ namespace Editor
             var parent = new GameObject(TerrainParentName);
             parent.transform.position = new Vector3(0, 0, 0);
 
-            const int tileWidth = TerrainHeightMapRes;
-            const int tileLength = TerrainHeightMapRes;
-            var height = (float)maxHeight;
+            const int tileWidth = TerrainHeightMapRes - 1;
+            const int tileLength = TerrainHeightMapRes - 1;
+            var height = (float)heightScale;
             
-            var tilesNumInXAxis = 1 + (int)Math.Ceiling((double)(_width - tileWidth) / (tileWidth - 1));
-            var tilesNumInYAxis = 1 + (int)Math.Ceiling((double)(_height - tileLength) / (tileLength - 1));
+            var tilesNumInXAxis = (int)Math.Ceiling((double)_width / tileWidth);
+            var tilesNumInYAxis = (int)Math.Ceiling((double)_height / tileLength);
             for (var xTileId = 0; xTileId < tilesNumInXAxis; ++xTileId)
             {
                 for (var yTileId = 0; yTileId < tilesNumInYAxis; ++yTileId)
                 {
-//                    if (xTileId == tilesNumInXAxis - 1)
-//                        tileWidth = _width - ((tileWidth - 1) * xTileId);
-//                    if (yTileId == tilesNumInYAxis - 1)
-//                        tileLength = _height - ((tileLength - 1) * yTileId);
-                    var heightMap = new float[tileLength, tileWidth];
-                    var colorMap = new Color[tileWidth, tileLength];
-                    for (var y = 0; y < tileLength; y++)
+                    var heightMap = new float[tileLength + 1, tileWidth + 1];
+                    var vertexStartX = xTileId * tileWidth;
+                    var vertexStartY = yTileId * tileLength;
+                    for (var x = 0; x <= tileWidth; ++x)
                     {
-                        for (var x = 0; x < tileWidth; x++)
+                        for (var y = 0; y <= tileLength; ++y)
                         {
-                            var curX = xTileId * (tileWidth - 1) + x ;
-                            var curY = yTileId * (tileLength - 1) + y;
-                            if (curX >= _width || curY >= _height || !filled[curX, curY])
+                            var genX = vertexStartX + x;
+                            var genY = vertexStartY + y;
+                            if (genX > _width || genY > _height)
                             {
-                                heightMap[y,x] = 0f;
-                                colorMap[x,y] = Color.white;
-                            } else {
-                                heightMap[y,x] = (float) ((filledHeights[curX, curY] - minHeight) / heightScale);
-                                colorMap[x,y] = colors[x, y];
+                                heightMap[y, x] = 0.0f;
+                            }
+                            else
+                            {
+
+                                heightMap[y, x] = vertexHeight[genX, genY];
                             }
                         }
                     }
+
+                    Texture2D texture = null;
+                    if (_isTerrainColored)
+                    {
+
+                        texture = new Texture2D(tileWidth, tileLength);
+                        for (var y = 0; y < tileLength; y++)
+                        {
+                            for (var x = 0; x < tileWidth; x++)
+                            {
+                                var curX = vertexStartX + x;
+                                var cutY = vertexStartY + y;
+                                if (curX >= _width || cutY >= _height)
+                                {
+                                    texture.SetPixel(x, y, Color.white);
+                                }
+                                else
+                                {
+                                    texture.SetPixel(x, y, edgeColor[curX, cutY]);
+                                }
+                            }
+                        }
+
+                        texture.Apply();
+                    }
+
                     CreateTerrainTile("terrain_" + xTileId +"_"+ yTileId, 
                         xTileId * tileWidth, yTileId * tileLength, 
-                        tileWidth, tileLength, height, heightMap, parent, colorMap);
+                        tileWidth, tileLength, height, heightMap, parent, texture);
                 }
             }
         }
@@ -440,6 +485,7 @@ namespace Editor
                         }
                         else
                         {
+                            
                             var color = Color.Lerp(Color.green, Color.red,
                                 (float) ((filledHeights[x, y] - minHeight) / heightScale));
                             texture.SetPixel(x, y, color);
